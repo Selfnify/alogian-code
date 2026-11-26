@@ -18,7 +18,7 @@ fn clock_activity_shows_status_without_raw_output_in_live_or_saved_groups() {
             .map(|line| line.to_string())
             .collect::<Vec<_>>()
             .join("\n");
-        assert!(text.contains("Ran a tool"));
+        assert!(text.contains("Date and time checked"));
         assert!(text.contains("└ "));
         assert!(!text.contains("datetime"));
         assert!(!text.contains("GMT+00:00"));
@@ -67,7 +67,7 @@ fn commands_render_as_ungrouped_rows_that_pulse_then_turn_green() {
     assert_eq!(timeline.sync(&tasks), Some(0));
     let mut lines = vec![];
     timeline.render(0, &mut lines);
-    assert_eq!(lines[0].to_string(), "● Running cargo test");
+    assert_eq!(lines[0].to_string(), "● Running command");
     assert!(matches!(
         lines[0].spans[0].style.fg,
         Some(Color::White) | Some(Color::DarkGray)
@@ -94,4 +94,26 @@ fn command_rows_show_stdout_instead_of_raw_json() {
     let text = lines.iter().map(|l| l.to_string()).collect::<Vec<_>>().join("\n");
     assert!(text.contains("└ hi"));
     assert!(!text.contains("output_limit"));
+}
+#[test]
+fn file_writes_show_nothing_while_running_then_a_green_diff() {
+    let mut timeline = Timeline::default();
+    let mut write = task("w", false);
+    write.name = "create_file".into();
+    write.label = "Writing a.txt…".into();
+    write.detail = "line one\nline two".into();
+    timeline.sync(&[write.clone()]);
+    let mut lines = vec![];
+    timeline.render(0, &mut lines);
+    let text = lines.iter().map(|l| l.to_string()).collect::<Vec<_>>().join("\n");
+    assert!(!text.contains("Writing"));
+    assert!(!text.contains("line one"));
+    write.done = true;
+    write.label = "Created a.txt".into();
+    timeline.sync(&[write]);
+    let mut lines = vec![];
+    timeline.render(0, &mut lines);
+    let text = lines.iter().map(|l| l.to_string()).collect::<Vec<_>>().join("\n");
+    assert!(text.contains("Created a.txt +2"));
+    assert!(text.contains("+ line one"));
 }

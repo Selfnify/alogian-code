@@ -46,12 +46,51 @@ fn finished_label(name: &str) -> &str {
         "list_files" => "Files listed",
         "search_files" => "Files searched",
         "create_file" | "write_file_chunk" | "edit_file" => "File saved",
-        "run_command" => "Command finished",
+        "run_command" => "Ran command",
         "run_code" => "Code finished",
         "web_search" => "Searched the web",
         "fetch_web" => "Page read",
         "context_compacting" | "context_compacted" => "Conversation compacted",
         _ => label(name),
+    }
+}
+pub fn is_write_tool(name: &str) -> bool {
+    matches!(name, "create_file" | "write_file_chunk")
+}
+fn target_name(v: &Value) -> Option<String> {
+    v["path"]
+        .as_str()
+        .or_else(|| v["file"].as_str())
+        .map(|p| p.rsplit(['/', '\\']).next().unwrap_or(p).to_string())
+        .filter(|s| !s.is_empty())
+}
+fn remembered_file(label: &str) -> Option<String> {
+    label
+        .strip_prefix("Writing ")
+        .or_else(|| label.strip_prefix("Editing "))
+        .and_then(|s| s.strip_suffix('…'))
+        .map(str::to_string)
+}
+fn running_label(name: &str, file: Option<&str>) -> String {
+    match (name, file) {
+        ("create_file" | "write_file_chunk", Some(f)) => format!("Writing {f}…"),
+        ("edit_file", Some(f)) => format!("Editing {f}…"),
+        _ => label(name).into(),
+    }
+}
+fn done_label(name: &str, file: Option<&str>) -> String {
+    match (name, file) {
+        ("create_file" | "write_file_chunk", Some(f)) => format!("Created {f}"),
+        ("edit_file", Some(f)) => format!("Edited {f}"),
+        _ => finished_label(name).into(),
+    }
+}
+fn status_label(name: &str, file: Option<&str>, done: bool, failed: bool) -> String {
+    match (done, failed) {
+        (true, true) if name == "run_command" => "Command failed".into(),
+        (true, true) => format!("Stopped: {}", label(name)),
+        (true, false) => done_label(name, file),
+        (false, _) => running_label(name, file),
     }
 }
 fn readable_output(raw: &str) -> String {
@@ -87,6 +126,16 @@ fn readable_output(raw: &str) -> String {
 }
 
 pub fn apply(tasks: &mut Vec<Task>, turn: usize, v: &Value) {
+    if let Some(path) = std::env::var_os("LUME_DEBUG_EVENTS") {
+        use std::io::Write;
+        if let Ok(mut file) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)
+        {
+            let _ = writeln!(file, "{v}");
+        }
+    }
     let state = v["state"].as_str().unwrap_or("");
     if !matches!(
         state,
@@ -108,6 +157,7 @@ pub fn apply(tasks: &mut Vec<Task>, turn: usize, v: &Value) {
     } else {
         String::new()
     };
+    let file = target_name(v);
     let prefix = format!("{turn}_");
     let id = if let Some(id) = v["activity_id"].as_str() {
         format!("{prefix}{id}")
@@ -136,47 +186,35 @@ pub fn apply(tasks: &mut Vec<Task>, turn: usize, v: &Value) {
     if let Some(t) = tasks.iter_mut().find(|t| t.id == id) {
         if let Some(name) = supplied {
             t.name = name.into();
-            if !t.done {
-                t.label = label(name).into();
-            }
         }
+        let file = file.clone().or_else(|| remembered_file(&t.label));
         if !command.is_empty() {
             t.command = command.clone();
         }
         t.done |= done;
         t.failed |= failed;
-        if done {
-            t.label = if failed {
-                format!("Stopped: {}", label(&t.name))
-            } else {
-                finished_label(&t.name).into()
-            };
-        }
+        t.label = status_label(&t.name, file.as_deref(), t.done, t.failed);
         if state == "file_preview" {
             if v["reset"] == true {
                 t.detail.clear();
             }
             t.detail.push_str(detail);
             t.detail = t.detail.chars().take(12000).collect();
-        } else if !detail.is_empty() {
+        } else if !detail.is_empty() && (!is_write_tool(&t.name) || (done && failed)) {
             t.detail = detail.chars().take(4000).collect();
         }
     } else {
         tasks.push(Task {
             id,
             name: name.into(),
-            label: if done {
-                if failed {
-                    format!("Stopped: {}", label(name))
-                } else {
-                    finished_label(name).into()
-                }
-            } else {
-                label(name).into()
-            },
+            label: status_label(name, file.as_deref(), done, failed),
             done,
             failed,
-            detail: detail.chars().take(4000).collect(),
+            detail: if is_write_tool(name) && state != "file_preview" && !failed {
+                String::new()
+            } else {
+                detail.chars().take(4000).collect()
+            },
             command,
         });
     }
@@ -244,6 +282,22 @@ mod tests {
         assert_eq!(tasks[0].label, "File saved");
     }
     #[test]
+    fn file_tools_show_the_file_name_while_writing_and_after_done() {
+        let mut tasks = vec![];
+        apply(
+            &mut tasks,
+            1,
+            &json!({"state":"tool_preparing","activity_id":"w","name":"create_file","path":"src/icon.svg"}),
+        );
+        assert_eq!(tasks[0].label, "Writing icon.svg…");
+        apply(
+            &mut tasks,
+            1,
+            &json!({"state":"tool_done","activity_id":"w","name":"create_file","ok":true}),
+        );
+        assert_eq!(tasks[0].label, "Created icon.svg");
+    }
+    #[test]
     fn tool_output_never_shows_raw_json() {
         let mut tasks = vec![];
         apply(
@@ -268,6 +322,7 @@ mod tests {
         );
         assert_eq!(tasks[0].detail, "hi");
         assert_eq!(tasks[0].command, "echo hi");
+        assert_eq!(tasks[0].label, "Ran command");
     }
     #[test]
     fn missing_result_ids_complete_the_right_tool_without_merging_distinct_calls() {

@@ -78,12 +78,12 @@ async fn post(
         .timeout(Duration::from_secs(10))
         .send()
         .await
-        .map_err(|_| "Couldn't reach Lume. Check your connection and try again.")?;
+        .map_err(|_| "Couldn't reach Alogian. Check your connection and try again.")?;
     let status = r.status();
     let value = r
         .json()
         .await
-        .map_err(|_| "Lume returned an unreadable response. Please try again.")?;
+        .map_err(|_| "Alogian returned an unreadable response. Please try again.")?;
     Ok(Response { status, value })
 }
 fn request_error(v: &Value) -> String {
@@ -102,7 +102,7 @@ fn link(value: &Value) -> Result<Link, String> {
         || !proof.starts_with("lms_")
         || !(1..=600).contains(&expires)
     {
-        return Err("Lume returned an invalid sign-in link. Please try again.".into());
+        return Err("Alogian returned an invalid sign-in link. Please try again.".into());
     }
     let url = format!("{WEBSITE}/login?code_token={token}");
     if value["verification_uri"].as_str() != Some(&url) {
@@ -146,7 +146,7 @@ pub(super) async fn authenticate(
                     let token = r.value["token"]
                         .as_str()
                         .filter(|s| s.len() == 68 && s.starts_with("lms_"))
-                        .ok_or("Lume did not return a valid session.")?;
+                        .ok_or("Alogian did not return a valid session.")?;
                     if stop.load(Ordering::Acquire) {
                         let _ = post(&http, api, "/code/login/cancel", &body).await;
                         return Ok(None);
@@ -160,7 +160,7 @@ pub(super) async fn authenticate(
                     return Ok(Some(
                         r.value["user"]["email"]
                             .as_str()
-                            .unwrap_or("your Lume account")
+                            .unwrap_or("your Alogian account")
                             .into(),
                     ));
                 }
@@ -183,11 +183,11 @@ pub(super) async fn authenticate(
                 if r.status == reqwest::StatusCode::TOO_MANY_REQUESTS
                     || r.status.is_server_error() =>
             {
-                let _ = events.send(Event::Status("Waiting for a connection to Lume…".into()));
+                let _ = events.send(Event::Status("Waiting for a connection to Alogian…".into()));
             }
             Ok(r) => return Err(request_error(&r.value)),
             Err(_) => {
-                let _ = events.send(Event::Status("Waiting for a connection to Lume…".into()));
+                let _ = events.send(Event::Status("Waiting for a connection to Alogian…".into()));
             }
         }
         tokio::select! {_=stopped(&stop)=>{let _=post(&http,api,"/code/login/cancel",&body).await;return Ok(None)},_=tokio::time::sleep_until(deadline)=>return Err("Your sign-in link expired. Get a new link to try again.".into()),_=tokio::time::sleep(interval)=>{}}

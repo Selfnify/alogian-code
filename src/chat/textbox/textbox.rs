@@ -9,7 +9,7 @@ use ratatui::{
 
 use crate::background::colors::active as theme;
 
-const PLACEHOLDER: &str = "Ask lume anything";
+const PLACEHOLDER: &str = "Ask Alogian anything";
 const PLACEHOLDER_COLOR: Color = Color::DarkGray;
 
 #[derive(Clone, Copy, PartialEq)]
@@ -40,11 +40,39 @@ struct ThemeMenu {
     original: usize,
 }
 
+#[derive(Clone)]
+enum LocalItem {
+    Model(String),
+    Install(&'static str),
+}
+
+struct LocalMenu {
+    items: Vec<LocalItem>,
+    selected: usize,
+}
+
+fn local_items() -> Vec<LocalItem> {
+    let status = crate::local::models::status();
+    let mut items: Vec<LocalItem> = status
+        .models
+        .into_iter()
+        .map(|(name, _)| LocalItem::Model(name))
+        .collect();
+    if !status.ollama_running {
+        items.push(LocalItem::Install("Ollama"));
+    }
+    if !status.llama_running {
+        items.push(LocalItem::Install("llama.cpp"));
+    }
+    items
+}
+
 pub struct TextBox {
     directory_cache:
         std::cell::RefCell<Option<(String, std::path::PathBuf, std::time::Instant, Vec<String>)>>,
     input: String,
     theme_menu: Option<ThemeMenu>,
+    local_menu: Option<LocalMenu>,
     pub queued: Vec<String>,
     chord: Option<std::time::Instant>,
     mention_sel: usize,
@@ -80,6 +108,7 @@ impl TextBox {
             usage: serde_json::Value::Null,
             picker: None,
             theme_menu: None,
+            local_menu: None,
             queued: Vec::new(),
             history: Vec::new(),
             history_pos: None,
@@ -128,13 +157,18 @@ impl TextBox {
         choices
     }
     pub fn commands(&self) -> Vec<&'static crate::chat::commands::Command> {
-        if self.dismissed || self.theme_menu_open() || self.settings_open() {
+        if self.dismissed || self.theme_menu_open() || self.local_menu_open() || self.settings_open() {
             vec![]
         } else {
             crate::chat::commands::matches(&self.input)
         }
     }
     pub fn close_overlay(&mut self) -> bool {
+        if self.local_menu_open() {
+            self.local_menu = None;
+            self.input.clear();
+            return true;
+        }
         if self.theme_menu_open() {
             if let Some(menu) = self.theme_menu.take() {
                 theme::set_index(menu.original);
@@ -221,6 +255,29 @@ impl TextBox {
         if !pick.ends_with('/') {
             self.input.push(' ');
         }
+    }
+
+    pub fn local_menu_open(&self) -> bool {
+        self.input.trim() == "/local"
+    }
+
+    pub fn ensure_local_menu(&mut self) {
+        if self.local_menu_open() {
+            if self.local_menu.is_none() {
+                self.local_menu = Some(LocalMenu {
+                    items: local_items(),
+                    selected: 0,
+                });
+            }
+        } else {
+            self.local_menu = None;
+        }
+    }
+
+    pub fn local_rows(&self) -> usize {
+        self.local_menu
+            .as_ref()
+            .map_or(1, |menu| menu.items.len().max(1))
     }
 
     pub fn theme_menu_open(&self) -> bool {
@@ -311,6 +368,49 @@ impl TextBox {
                 _ => {}
             }
         }
+        if self.local_menu_open() {
+            if self.local_menu.is_none() {
+                self.local_menu = Some(LocalMenu {
+                    items: local_items(),
+                    selected: 0,
+                });
+            }
+            let count = self.local_menu.as_ref().map_or(0, |menu| menu.items.len());
+            match key.code {
+                KeyCode::Up => {
+                    if let Some(menu) = self.local_menu.as_mut() {
+                        menu.selected = menu.selected.saturating_sub(1);
+                    }
+                }
+                KeyCode::Down => {
+                    if let Some(menu) = self.local_menu.as_mut() {
+                        menu.selected = (menu.selected + 1).min(count.saturating_sub(1));
+                    }
+                }
+                KeyCode::Enter => {
+                    let chosen = self
+                        .local_menu
+                        .take()
+                        .and_then(|menu| menu.items.get(menu.selected).cloned());
+                    self.input.clear();
+                    match chosen {
+                        Some(LocalItem::Model(name)) => crate::local::models::save_selected(&name),
+                        Some(LocalItem::Install(what)) => {
+                            return Some(format!(
+                                "Install {what} on this PC for local models. First check whether it is already installed. Ask me before running any installer."
+                            ));
+                        }
+                        None => {}
+                    }
+                }
+                KeyCode::Esc => {
+                    self.local_menu = None;
+                    self.input.clear();
+                }
+                _ => {}
+            }
+            return None;
+        }
         if self.theme_menu_open() {
             if self.theme_menu.is_none() {
                 let current = theme::index();
@@ -348,6 +448,7 @@ impl TextBox {
             return None;
         }
         self.theme_menu = None;
+        self.local_menu = None;
         if let Some(picker) = self.picker.as_mut() {
             match key.code {
                 KeyCode::Up => picker.selected = picker.selected.saturating_sub(1),
@@ -499,46 +600,56 @@ impl TextBox {
 }
 
 pub fn draw(frame: &mut Frame, area: Rect, textbox: &TextBox) {
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
-        .border_style(Style::default().fg(theme::accent()))
-        .style(Style::default().bg(theme::bg()));
-
-    let content: Vec<Line> = if textbox.input.is_empty() {
-        vec![Line::from(vec![
+    let surface = surface_color();
+    let mut content: Vec<Line> = vec![Line::raw("")];
+    if textbox.input.is_empty() {
+        content.push(Line::from(vec![
             Span::styled("> ", Style::default().fg(theme::text())),
             Span::styled(PLACEHOLDER, Style::default().fg(PLACEHOLDER_COLOR)),
-        ])]
+        ]));
     } else {
-        textbox
-            .input()
-            .split('\n')
-            .enumerate()
-            .map(|(i, line)| {
-                let prefix = if i == 0 { "> " } else { "  " };
-                Line::from(Span::styled(
-                    format!("{prefix}{line}"),
-                    Style::default().fg(theme::text()),
-                ))
-            })
-            .collect()
-    };
-
-    let prompt = Paragraph::new(content)
-        .style(Style::default().bg(theme::bg()))
-        .block(block);
-    frame.render_widget(prompt, area);
+        for (i, line) in textbox.input().split('\n').enumerate() {
+            let prefix = if i == 0 { "> " } else { "  " };
+            content.push(Line::from(Span::styled(
+                format!("{prefix}{line}"),
+                Style::default().fg(theme::text()),
+            )));
+        }
+    }
+    content.push(Line::raw(""));
+    frame.render_widget(
+        Paragraph::new(content).style(Style::default().bg(surface)),
+        area,
+    );
 
     let max_x = area.x + area.width.saturating_sub(2);
     let last_line = textbox.input().rsplit('\n').next().unwrap_or("");
     let rows = textbox.input().split('\n').count().max(1) as u16;
-    let cursor_x = (area.x + 3 + last_line.chars().count() as u16).min(max_x);
+    let cursor_x = (area.x + 2 + last_line.chars().count() as u16).min(max_x);
     let cursor_y = (area.y + rows).min(area.bottom().saturating_sub(2));
     frame.set_cursor_position((cursor_x, cursor_y));
 }
 
-pub fn draw_status(frame: &mut Frame, area: Rect, textbox: &TextBox, exit_armed: bool) {
+fn surface_color() -> Color {
+    match (theme::bg(), theme::text()) {
+        (Color::Rgb(br, bg, bb), Color::Rgb(tr, tg, tb)) => {
+            Color::Rgb(mix(br, tr), mix(bg, tg), mix(bb, tb))
+        }
+        (bg, _) => bg,
+    }
+}
+
+fn mix(base: u8, ink: u8) -> u8 {
+    ((base as u16 * 88 + ink as u16 * 12) / 100) as u8
+}
+
+pub fn draw_status(
+    frame: &mut Frame,
+    area: Rect,
+    textbox: &TextBox,
+    exit_armed: bool,
+    activity: Option<&str>,
+) {
     let token_estimate = (textbox.input().chars().count() + 3) / 4;
     let line = if exit_armed {
         Line::from(Span::styled(
@@ -562,6 +673,12 @@ pub fn draw_status(frame: &mut Frame, area: Rect, textbox: &TextBox, exit_armed:
             Span::styled(" · ◌ ", Style::default().fg(theme::text())),
             Span::styled(format!("~{token_estimate}"), Style::default().fg(theme::text())),
         ];
+        if let Some(a) = activity {
+            spans.push(Span::styled(
+                format!(" · {a} · Ctrl-T tasks"),
+                Style::default().fg(theme::text()),
+            ));
+        }
         let background = crate::local::jobs::running_count();
         if background > 0 {
             let plural = if background == 1 { "" } else { "s" };
@@ -719,6 +836,56 @@ pub fn draw_resume_choice(frame: &mut Frame, area: Rect, textbox: &TextBox) {
         .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(theme::accent()))
         .title(" Resume in which folder? ")
+        .style(Style::default().bg(theme::bg()));
+    frame.render_widget(
+        Paragraph::new(lines)
+            .block(block)
+            .style(Style::default().bg(theme::bg())),
+        area,
+    );
+}
+pub fn draw_local_menu(frame: &mut Frame, area: Rect, textbox: &TextBox) {
+    let lines: Vec<Line> = match textbox.local_menu.as_ref() {
+        Some(menu) if !menu.items.is_empty() => menu
+            .items
+            .iter()
+            .enumerate()
+            .map(|(i, item)| {
+                let style = if i == menu.selected {
+                    Style::default()
+                        .fg(Color::Rgb(35, 95, 190))
+                        .add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default().fg(theme::text())
+                };
+                let (name, description) = match item {
+                    LocalItem::Model(name) => (name.clone(), "Use as local model".to_string()),
+                    LocalItem::Install(what) => {
+                        (format!("Install {what}?"), "Enter = yes · Esc = no".to_string())
+                    }
+                };
+                Line::from(Span::styled(
+                    format!(
+                        " {} {:<18} {}",
+                        if i == menu.selected { ">" } else { " " },
+                        name,
+                        description
+                    ),
+                    style,
+                ))
+            })
+            .collect(),
+        _ => vec![Line::from(Span::styled(
+            " No local models found.",
+            Style::default().fg(theme::text()),
+        ))],
+    };
+    frame.render_widget(Clear, area);
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(theme::accent()))
+        .title(" Local models ")
         .style(Style::default().bg(theme::bg()));
     frame.render_widget(
         Paragraph::new(lines)

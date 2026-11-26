@@ -1,12 +1,12 @@
 <p align="center">
-  <img src="docs/preview.png" alt="Lume Code running in a terminal" width="900">
+  <img src="docs/preview.png" alt="Alogian Code running in a terminal" width="900">
 </p>
 
-# Lume Code
+# Alogian Code
 
-An AI coding agent that lives in your terminal. Built in Rust, powered by your Lume account.
+An AI coding agent that lives in your terminal. Built in Rust, powered by your Alogian account.
 
-Lume Code reads and edits files in your project, runs commands with your approval, plans before it changes anything, and picks up where you left off. It uses the same streaming replies, Guard, web tools, Deep Research and Coworker jobs as Lume.
+Alogian Code reads and edits files in your project, runs commands with your approval, plans before it changes anything, and picks up where you left off. It uses the same streaming replies, Guard, web tools, Deep Research and Coworker jobs as Alogian.
 
 ## Features
 
@@ -23,35 +23,43 @@ Lume Code reads and edits files in your project, runs commands with your approva
 
 ## Install
 
-Requires Windows x64 or macOS (Apple Silicon or Intel), and Node.js 20 or newer. Rust is not needed to install or use the npm package; Rust and Cargo are needed only to build or publish it.
+Requires Windows x64 or macOS (Apple Silicon or Intel). No Node.js or Rust is needed.
 
-```sh
-npm install --global lume-code
-lume
+Windows (PowerShell):
+
+```powershell
+irm https://raw.githubusercontent.com/Selfnify/alogian-code/main/install.ps1 | iex
 ```
 
-Supported platforms: Windows x64 and macOS (Apple Silicon and Intel). macOS support is new and still being tested.
+macOS (Terminal):
 
+```sh
+curl -fsSL https://raw.githubusercontent.com/Selfnify/alogian-code/main/install.sh | sh
+```
+
+Then open a new terminal and run `alogian`.
+
+Supported platforms: Windows x64 and macOS (Apple Silicon and Intel). macOS support is new and still being tested.
 ## Quick start
 
 ```sh
-lume login
-lume
-lume --project "/path/to/project"
+alogian login
+alogian
+alogian --project "/path/to/project"
 ```
 
-Sign in through your browser with your normal Lume account. Your session is stored in the Windows Credential Manager or the macOS Keychain, and the client contains no model provider keys. Type `/` inside Lume for commands, or `?` for keyboard shortcuts.
+Sign in through your browser with your normal Alogian account. Your session is stored in the Windows Credential Manager or the macOS Keychain, and the client contains no model provider keys. Type `/` inside Alogian for commands, or `?` for keyboard shortcuts.
 
 ## Safety
 
 - Commands run on your PC with your user permissions, so read them before you approve.
 - A command stops after 60 seconds, and its child processes are cleaned up.
 - File writes are small, atomic and capped, and individual files are limited to 8 MiB.
-- Passwords and email codes are only ever entered on the Lume website, never in the terminal.
+- Passwords and email codes are only ever entered on the Alogian website, never in the terminal.
 
 ## Configuration
 
-Lume Code connects to the public Lume API at `https://api.lume.dpdns.org`. Set `LUME_CODE_API` to use another HTTPS backend, or a localhost HTTP address for development. No `.env` file from an untrusted project is loaded.
+Alogian Code connects to the public Alogian API at `https://api.lume.dpdns.org`. Set `LUME_CODE_API` to use another HTTPS backend, or a localhost HTTP address for development. No `.env` file from an untrusted project is loaded.
 
 ## Build from source
 
@@ -60,7 +68,7 @@ cargo build --release
 cargo test
 ```
 
-Run `target/release/lume-code login` on macOS, or `target\release\lume-code.exe login` on Windows. To build a self-contained npm package for the current host, run `npm pack` from `npm/`; `prepack` builds Lume Code and ASTRA automatically. Building requires Node.js 20+, Rust, and Cargo.
+Run `target/release/lume-code login` on macOS, or `target\release\lume-code.exe login` on Windows. To build a self-contained npm package for the current host, run `npm pack` from `npm/`; `prepack` builds Alogian Code and ASTRA automatically. Building requires Node.js 20+, Rust, and Cargo.
 
 GitHub Actions tests and builds Windows x64, macOS Apple Silicon, and macOS Intel after relevant changes are pushed to `main` (and for pull requests). To publish, bump the version in the root `Cargo.toml`, the root `Cargo.lock` package entry, and `npm/package.json` in the same commit, then push it to `main`. Publishing runs only after every platform build passes. The workflow publishes to npm with trusted publishing and provenance, verifies the package, creates a matching GitHub release, and attaches the platform binaries and npm tarball. Ordinary commits do not publish a package. Configure npm trusted publishing for `Selfnify/Lume-code` and `.github/workflows/native-release.yml` before the first automated release.
 

@@ -1,4 +1,4 @@
-# Build and release Lume Code
+# Build and release Alogian Code
 
 ## Build the native binaries
 
@@ -33,8 +33,8 @@ git switch main
 git pull --ff-only origin main
 # Update the Cargo.toml and npm/package.json versions to the same next version.
 git add Cargo.toml Cargo.lock npm/package.json
-git commit -m "Release Lume Code <version>"
-git tag -a v<version> -m "Lume Code <version>"
+git commit -m "Release Alogian Code <version>"
+git tag -a v<version> -m "Alogian Code <version>"
 git push origin main
 git push origin v<version>
 ```

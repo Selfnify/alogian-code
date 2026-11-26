@@ -1,9 +1,10 @@
 use super::tasker::Task;
 use crate::background::colors::active as theme;
+const DIFF_ADD_BG: Color = Color::Rgb(33, 58, 43);
 #[cfg(test)]
 mod tests;
 use ratatui::{
-    style::{Color, Style},
+    style::{Color, Modifier, Style},
     text::{Line, Span},
 };
 #[derive(Default)]
@@ -42,6 +43,24 @@ fn command_lines(detail: &str) -> Vec<String> {
     }
     out
 }
+fn readable_on_dark(color: Color) -> Color {
+    match color {
+        Color::Rgb(r, g, b) => {
+            let lum = (r as u32 * 299 + g as u32 * 587 + b as u32 * 114) / 1000;
+            if lum < 150 {
+                Color::Rgb(
+                    r.saturating_add(120),
+                    g.saturating_add(120),
+                    b.saturating_add(120),
+                )
+            } else {
+                color
+            }
+        }
+        other => other,
+    }
+}
+
 impl Timeline {
     pub fn latest(&mut self) {
         if let Some(g) = self.groups.last_mut() {
@@ -108,6 +127,11 @@ impl Timeline {
             .as_millis()
             / 400) as usize;
         for task in &group.tasks {
+            let is_write = super::tasker::is_write_tool(&task.name);
+            if is_write && !task.done {
+                continue;
+            }
+            let diff = is_write && task.done && !task.failed && !task.detail.is_empty();
             let color = if !task.done {
                 if phase % 2 == 0 {
                     Color::White
@@ -119,15 +143,76 @@ impl Timeline {
             } else {
                 Color::Green
             };
-            let verb = if task.done { "Ran" } else { "Running" };
-            let title = if !task.command.is_empty() {
-                format!("{verb} {}", task.command)
-            } else {
-                format!("{verb} a tool")
-            };
+            if diff {
+                let path = task.label.strip_prefix("Created ").unwrap_or(&task.label);
+                let all: Vec<&str> = task.detail.lines().collect();
+                let total = all.len();
+                let width = total.to_string().len();
+                lines.push(Line::from(vec![
+                    Span::styled("• ", Style::default().add_modifier(Modifier::DIM)),
+                    Span::styled("Added", Style::default().add_modifier(Modifier::BOLD)),
+                    Span::raw(format!(" {path} ")),
+                    Span::styled(format!("+{total}"), Style::default().fg(Color::Green)),
+                ]));
+                let lang = path.rsplit('.').next().unwrap_or("txt");
+                let tokens = super::markdown::highlight(&task.detail, lang);
+                let keep = if self.full { total } else { total.min(3) };
+                for (i, text) in all.iter().take(keep).enumerate() {
+                    let mut spans = vec![
+                        Span::styled(
+                            format!("{:>width$} ", i + 1),
+                            Style::default()
+                                .fg(theme::text())
+                                .add_modifier(Modifier::DIM),
+                        ),
+                        Span::styled(
+                            "+ ",
+                            Style::default().fg(Color::Green).bg(DIFF_ADD_BG),
+                        ),
+                    ];
+                    match tokens.get(i) {
+                        Some(parts) => {
+                            let mut budget = 160usize;
+                            for (part, color) in parts {
+                                let clean_part: String =
+                                    crate::clean(part).chars().take(budget).collect();
+                                budget = budget.saturating_sub(clean_part.chars().count());
+                                if clean_part.is_empty() {
+                                    continue;
+                                }
+                                spans.push(Span::styled(
+                                    clean_part,
+                                    Style::default()
+                                        .fg(readable_on_dark(*color))
+                                        .bg(DIFF_ADD_BG),
+                                ));
+                            }
+                        }
+                        None => {
+                            let plain: String =
+                                crate::clean(text).chars().take(160).collect();
+                            spans.push(Span::styled(
+                                plain,
+                                Style::default().fg(Color::Green).bg(DIFF_ADD_BG),
+                            ));
+                        }
+                    }
+                    lines.push(Line::from(spans).style(Style::default().bg(DIFF_ADD_BG)));
+                }
+                if total > keep {
+                    lines.push(Line::styled(
+                        format!("  … +{} lines (Ctrl-O)", total - keep),
+                        Style::default()
+                            .fg(theme::text())
+                            .add_modifier(Modifier::DIM),
+                    ));
+                }
+                lines.push(Line::raw(""));
+                continue;
+            }
             lines.push(Line::from(vec![
                 Span::styled("● ", Style::default().fg(color)),
-                Span::raw(title),
+                Span::raw(task.label.clone()),
             ]));
             let detail: Vec<String> = if task.name == "get_datetime" {
                 vec![]

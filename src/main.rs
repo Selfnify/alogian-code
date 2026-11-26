@@ -1,4 +1,5 @@
 use chat::tasker::{apply as apply_activity, Task};
+mod onboarding;
 mod settings;
 mod clipboard;
 mod actions;
@@ -40,7 +41,7 @@ use ratatui::{
     DefaultTerminal, Frame,
 };
 
-use background::{colors::active as theme, loading, ui};
+use background::{colors::active as theme, ui};
 use chat::{
     header,
     textbox::textbox::{self as tb, TextBox},
@@ -156,7 +157,7 @@ fn main() -> io::Result<()> {
         if !login::run()? {
             return Ok(());
         }
-        println!("Signed in to Lume Code.");
+        println!("Signed in to Alogian Code.");
         return Ok(());
     }
     match connection::Connection::load() {
@@ -166,7 +167,7 @@ fn main() -> io::Result<()> {
                 connection::SessionStatus::Banned { reason, appeal } => {
                     connection::forget(&connection.api);
                     eprintln!(
-                        "This Lume account is banned. Lume Code cannot sign in with this account."
+                        "This Alogian account is banned. Alogian Code cannot sign in with this account."
                     );
                     if !reason.is_empty() {
                         eprintln!("Reason: {reason}");
@@ -183,7 +184,7 @@ fn main() -> io::Result<()> {
                     }
                 }
                 connection::SessionStatus::Unavailable(message) => {
-                    eprintln!("{message} Starting Lume Code anyway; online features may not be available.");
+                    eprintln!("{message} Starting Alogian Code anyway; online features may not be available.");
                 }
             }
         }
@@ -195,6 +196,7 @@ fn main() -> io::Result<()> {
     }
     let mut terminal = ratatui::init();
     execute!(io::stdout(), EnableMouseCapture, EnableBracketedPaste)?;
+    onboarding::run(&mut terminal)?;
     let result = run(&mut terminal);
     let _ = execute!(io::stdout(), DisableBracketedPaste, DisableMouseCapture);
     ratatui::restore();
@@ -214,6 +216,7 @@ fn run(terminal: &mut DefaultTerminal) -> io::Result<()> {
     let mut pending: Option<Pending> = None;
     let mut exit_armed_at: Option<Instant> = None;
     let mut scroll_back: usize = 0;
+    let mut seen_messages: usize = 0;
     let mut side: Option<side_question::SideQuestion> = None;
     let monitor = usage_monitor::Monitor::new();
     let mut side_item = serde_json::Value::Null;
@@ -373,7 +376,7 @@ fn run(terminal: &mut DefaultTerminal) -> io::Result<()> {
                     if let Some(p) = pending.as_mut() {
                         p.text.push_str(&chat::tasker::card_note(&v));
                         if v["state"] == "mode_change_requested" {
-                            p.text.push_str("\nLume requests Edit mode. Review the plan, press Shift-Tab to select Edit, then send Continue.");
+                            p.text.push_str("\nAlogian requests Edit mode. Review the plan, press Shift-Tab to select Edit, then send Continue.");
                         }
                     }
                 }
@@ -410,8 +413,6 @@ fn run(terminal: &mut DefaultTerminal) -> io::Result<()> {
                 }
             }
         }
-        let t = start.elapsed().as_secs_f64();
-        let done = loading::is_done(t);
         let exit_armed = exit_armed_at.is_some();
         let working = pending.is_some();
         textbox.set_working(working || side.is_some());
@@ -424,23 +425,25 @@ fn run(terminal: &mut DefaultTerminal) -> io::Result<()> {
             hits: vec![],
             back: 0,
         };
+        textbox.ensure_local_menu();
+        if scroll_back == 0 {
+            seen_messages = messages.len();
+        }
+        let unseen = messages.len().saturating_sub(seen_messages);
         terminal.draw(|frame| {
-            if done {
-                info = draw_screen(
-                    frame,
-                    &textbox,
-                    &messages,
-                    pending.as_ref(),
-                    spinner,
-                    exit_armed,
-                    scroll_back,
-                    &tasks,
-                    tasker,
-                    approval.as_ref().map(|a| a.0.as_str()),
-                );
-            } else {
-                loading::draw(frame, t);
-            }
+            info = draw_screen(
+                frame,
+                &textbox,
+                &messages,
+                pending.as_ref(),
+                spinner,
+                exit_armed,
+                scroll_back,
+                &tasks,
+                tasker,
+                approval.as_ref().map(|a| a.0.as_str()),
+                unseen,
+            );
             background::colors::adapt_buffer(frame.buffer_mut());
         })?;
         let last_max = info.max_back;
@@ -606,8 +609,7 @@ fn run(terminal: &mut DefaultTerminal) -> io::Result<()> {
                                 textbox.queued.push(text.trim().to_string());
                             }
                             _ => {
-                                if done
-                                    && !(working
+                                if !(working
                                         && key.code == KeyCode::Enter
                                         && !textbox.input().starts_with("/btw "))
                                 {
@@ -768,7 +770,7 @@ fn run(terminal: &mut DefaultTerminal) -> io::Result<()> {
                                             if result.is_ok() {
                                                 break 'main;
                                             }
-                                            messages.push(Message::Ai{text:"Could not finish signing out. Try lume-code logout after closing the app.".into(),summary:None});
+                                            messages.push(Message::Ai{text:"Could not finish signing out. Try alogian logout after closing the app.".into(),summary:None});
                                             continue;
                                         }
                                         turn_number += 1;
@@ -888,12 +890,13 @@ fn draw_screen(
     textbox: &TextBox,
     messages: &[Message],
     pending: Option<&Pending>,
-    spinner: &'static str,
+    _spinner: &'static str,
     exit_armed: bool,
     scroll_back: usize,
     tasks: &[Task],
     tasker: bool,
     approval: Option<&str>,
+    unseen: usize,
 ) -> DrawInfo {
     ui::draw(frame);
 
@@ -916,18 +919,21 @@ fn draw_screen(
                 .min(3) as u16
         })
         .sum::<u16>();
+    let input_height = match approval {
+        Some(label) => (label.lines().count() as u16 + 4).clamp(4, 12),
+        None => textbox.height(),
+    };
     let chunks = Layout::vertical([
-        Constraint::Length(header::height(area.width)),
+        Constraint::Length(1),
         Constraint::Min(1),
         Constraint::Length(banner_height + 1),
-        Constraint::Length(textbox.height()),
+        Constraint::Length(input_height),
         Constraint::Length(1),
     ])
     .split(area);
 
-    header::draw(frame, chunks[0]);
-
-    let mut lines: Vec<Line> = vec![Line::raw("")];
+    let mut lines: Vec<Line> = header::transcript_lines(chunks[1].width);
+    lines.push(Line::raw(""));
     let mut headers = vec![];
     for message in messages {
         if let Message::Tools(id) = message {
@@ -994,6 +1000,11 @@ fn draw_screen(
         })
         .collect::<Vec<_>>();
 
+    frame.render_widget(
+        Paragraph::new(vec![header::compact_line(chunks[0].width)])
+        .style(Style::default().bg(theme::bg())),
+        chunks[0],
+    );
     let history = Paragraph::new(lines)
         .wrap(Wrap { trim: false })
         .scroll((top, 0))
@@ -1017,37 +1028,23 @@ fn draw_screen(
         hits.push((rect, action));
         banner_y += height;
     }
-    if let Some(p) = pending {
-        let spinner_line = Line::from(vec![
-            Span::styled(spinner, Style::default().fg(theme::accent())),
-            Span::styled(
-                format!(
-                    " {} · {}s · {} tools · esc to interrupt · Ctrl-T tasks",
-                    tasks
-                        .iter()
-                        .rev()
-                        .find(|t| !t.done)
-                        .map(|t| t.label.as_str())
-                        .unwrap_or(p.word),
-                    p.started.elapsed().as_secs(),
-                    tasks.len()
-                ),
-                Style::default().fg(theme::text()),
-            ),
-        ]);
-        frame.render_widget(
-            Paragraph::new(spinner_line).style(Style::default().bg(theme::bg())),
-            Rect::new(
-                chunks[2].x,
-                chunks[2].bottom().saturating_sub(1),
-                chunks[2].width,
-                1,
-            ),
-        );
+    if approval.is_none() {
+        tb::draw(frame, chunks[3], textbox);
     }
-
-    tb::draw(frame, chunks[3], textbox);
-    tb::draw_status(frame, chunks[4], textbox, exit_armed);
+    let activity = pending.map(|p| {
+        format!(
+            "{} · {}s · {} tools",
+            tasks
+                .iter()
+                .rev()
+                .find(|t| !t.done)
+                .map(|t| t.label.as_str())
+                .unwrap_or(p.word),
+            p.started.elapsed().as_secs(),
+            tasks.len()
+        )
+    });
+    tb::draw_status(frame, chunks[4], textbox, exit_armed, activity.as_deref());
     let commands = textbox.commands();
     if !commands.is_empty() {
         let height = (commands.len().min(5) as u16).min(chunks[3].y);
@@ -1059,21 +1056,17 @@ fn draw_screen(
         );
     }
     if let Some(label) = approval {
-        let body: Vec<&str> = label.lines().collect();
-        let height = ((body.len() + 4) as u16).min(chunks[3].y);
-        let area = Rect::new(chunks[3].x, chunks[3].y - height, chunks[3].width, height);
-        let mut modal: Vec<Line> = body
-            .iter()
+        let mut modal: Vec<Line> = label
+            .lines()
             .map(|line| Line::styled(clean(line), Style::default().fg(theme::text())))
             .collect();
-        modal.push(Line::raw(""));
         modal.push(Line::styled(
             "[Y] Approve   [N] Deny",
             Style::default()
                 .fg(theme::accent())
                 .add_modifier(ratatui::style::Modifier::BOLD),
         ));
-        frame.render_widget(ratatui::widgets::Clear, area);
+        frame.render_widget(ratatui::widgets::Clear, chunks[3]);
         frame.render_widget(
             Paragraph::new(modal)
                 .wrap(Wrap { trim: false })
@@ -1085,7 +1078,7 @@ fn draw_screen(
                         .title(" Approval required "),
                 )
                 .style(Style::default().bg(theme::bg())),
-            area,
+            chunks[3],
         );
     }
     if !textbox.queued.is_empty() {
@@ -1139,6 +1132,14 @@ fn draw_screen(
             textbox,
         );
     }
+    if textbox.local_menu_open() {
+        let height = ((textbox.local_rows() as u16) + 2).min(chunks[3].y);
+        tb::draw_local_menu(
+            frame,
+            Rect::new(chunks[3].x, chunks[3].y - height, chunks[3].width, height),
+            textbox,
+        );
+    }
     if textbox.shortcuts {
         use ratatui::widgets::Clear;
         let height = 20.min(chunks[3].y);
@@ -1187,15 +1188,31 @@ fn draw_screen(
         );
     }
     let button = if back > 0 {
+        let candidates: &[&str] = if unseen > 0 {
+            &[
+                " New activity · ↓ Back to bottom · End ",
+                " New activity · ↓ Bottom · End ",
+                " New · ↓ Bottom ",
+                " ↓ ",
+            ]
+        } else {
+            &[" ↓ Back to bottom · End ", " ↓ Bottom · End ", " ↓ "]
+        };
+        let label = candidates
+            .iter()
+            .copied()
+            .find(|l| l.chars().count() as u16 <= chunks[1].width)
+            .unwrap_or(" ↓ ");
+        let width = label.chars().count() as u16;
         let rect = Rect {
-            x: chunks[3].x + chunks[3].width.saturating_sub(7),
-            y: chunks[2].y,
-            width: 5,
+            x: chunks[1].x + chunks[1].width.saturating_sub(width) / 2,
+            y: chunks[1].bottom().saturating_sub(1),
+            width,
             height: 1,
         };
         frame.render_widget(
             Paragraph::new(Line::from(Span::styled(
-                "  ↓  ",
+                label,
                 Style::default().fg(theme::text()).bg(BUTTON_BG),
             ))),
             rect,
@@ -1321,11 +1338,11 @@ mod ui_tests {
     #[test]
     fn tasker_is_live_ungrouped_and_approval_is_visible() {
         let shown = screen(false, false);
-        assert!(shown.contains("● Ran a tool"));
+        assert!(shown.contains("● Writing file"));
         assert!(shown.contains("LIVE FILE CONTENTS"));
         let approval = screen(true, true);
         assert!(approval.contains("[Y] Approve"));
-        assert!(approval.contains("● Ran a tool"));
+        assert!(approval.contains("● Writing file"));
         assert!(approval.contains("Finished file"));
     }
     #[test]

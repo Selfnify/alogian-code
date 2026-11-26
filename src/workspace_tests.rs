@@ -103,7 +103,7 @@ fn usage_recovery_and_folder_access_stay_above_the_textbox_on_small_terminals() 
             .collect::<Vec<_>>();
         let input = rows
             .iter()
-            .position(|r| r.contains("Ask lume anything"))
+            .position(|r| r.contains("Ask Alogian anything"))
             .unwrap();
         assert!(rows[..input]
             .iter()

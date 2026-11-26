@@ -22,7 +22,7 @@ impl SideQuestion {
                 let binding=c.request("/code/connect",Some(&json!({"root":root}))).await?;
                 context.push(json!({"role":"user","content":question}));
                 let body=json!({"messages":context,"chat_id":binding["id"],"data_epoch":profile["epoch"],"interaction_mode":"plan","code_options":{"side_question":true}});
-                let response=c.http.post(format!("{}/code/chat",c.api)).bearer_auth(&c.token).header("x-lume-code-client",binding["id"].as_str().unwrap_or("")).json(&body).timeout(std::time::Duration::from_secs(180)).send().await.map_err(|_|"The side question could not connect to Lume.")?;
+                let response=c.http.post(format!("{}/code/chat",c.api)).bearer_auth(&c.token).header("x-lume-code-client",binding["id"].as_str().unwrap_or("")).json(&body).timeout(std::time::Duration::from_secs(180)).send().await.map_err(|_|"The side question could not connect to Alogian.")?;
                 if !response.status().is_success(){let v:Value=response.json().await.unwrap_or_default();return Err(v["error"].as_str().unwrap_or("The side question could not be completed.").into());}
                 let mut stream=response.bytes_stream();let mut buffer=Vec::new();let mut complete=false;let mut answered=false;
                 loop {

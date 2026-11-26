@@ -26,6 +26,7 @@ struct Model {
     link: Option<flow::Link>,
     link_started: Option<Instant>,
     scroll: u16,
+    selected: usize,
 }
 impl Default for Model {
     fn default() -> Self {
@@ -35,6 +36,7 @@ impl Default for Model {
             link: None,
             link_started: None,
             scroll: 0,
+            selected: 0,
         }
     }
 }
@@ -162,7 +164,16 @@ fn screen(terminal: &mut ratatui::DefaultTerminal, api: String) -> io::Result<bo
         let (mut login, mut clipboard, mut cancel) = (false, false, false);
         match event::read()? {
             Event::Key(k) if k.kind == KeyEventKind::Press => match k.code {
-                KeyCode::Enter => login = true,
+                KeyCode::Enter => {
+                    let cancel_index = if model.link.is_some() { 2 } else { 1 };
+                    if model.selected == 0 {
+                        login = true;
+                    } else if model.selected == cancel_index {
+                        cancel = true;
+                    } else {
+                        clipboard = true;
+                    }
+                }
                 KeyCode::Char('c' | 'C')
                     if k.modifiers
                         .contains(crossterm::event::KeyModifiers::CONTROL) =>
@@ -171,8 +182,13 @@ fn screen(terminal: &mut ratatui::DefaultTerminal, api: String) -> io::Result<bo
                 }
                 KeyCode::Char('c' | 'C') => clipboard = true,
                 KeyCode::Esc => cancel = true,
-                KeyCode::PageDown | KeyCode::Down => model.scroll = model.scroll.saturating_add(3),
-                KeyCode::PageUp | KeyCode::Up => model.scroll = model.scroll.saturating_sub(3),
+                KeyCode::Down => {
+                    let last = if model.link.is_some() { 2 } else { 1 };
+                    model.selected = (model.selected + 1).min(last);
+                }
+                KeyCode::Up => model.selected = model.selected.saturating_sub(1),
+                KeyCode::PageDown => model.scroll = model.scroll.saturating_add(3),
+                KeyCode::PageUp => model.scroll = model.scroll.saturating_sub(3),
                 _ => {}
             },
             Event::Mouse(m) => match m.kind {

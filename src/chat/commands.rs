@@ -146,7 +146,7 @@ pub const COMMANDS: &[Command] = &[
         description: "Turn features on or off",
     },
 ];
-pub const SHORTCUTS: &str = "Keyboard shortcuts\n\n/                 Find commands\n↑ / ↓             Select a command\nTab / Enter       Insert selected command\nEnter             Send message or run command\nEsc               Close menu or stop reply/side question\nShift-Tab         Switch Plan / Edit\nCtrl-T            Expand latest inline tool group\nCtrl-R            Prepare Continue for interrupted work\nPageUp / PageDown  Scroll conversation\nEnd               Return to newest message\nCtrl-D twice      Exit Lume Code\n? (empty textbox) Show / hide this guide\n\nPress Esc or ? to close.";
+pub const SHORTCUTS: &str = "Keyboard shortcuts\n\n/                 Find commands\n↑ / ↓             Select a command\nTab / Enter       Insert selected command\nEnter             Send message or run command\nEsc               Close menu or stop reply/side question\nShift-Tab         Switch Plan / Edit\nCtrl-T            Expand latest inline tool group\nCtrl-R            Prepare Continue for interrupted work\nPageUp / PageDown  Scroll conversation\nEnd               Return to newest message\nCtrl-D twice      Exit Alogian Code\n? (empty textbox) Show / hide this guide\n\nPress Esc or ? to close.";
 
 pub fn matches(input: &str) -> Vec<&'static Command> {
     if !input.starts_with('/') || input.chars().any(char::is_whitespace) {

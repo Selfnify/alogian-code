@@ -19,7 +19,7 @@ impl Lock {
             .truncate(false)
             .open(path)
             .map_err(|e| e.to_string())?;
-        file.try_lock().map_err(|_|"This project session is open in another Lume Code window. Close it before resuming here.".to_string())?;
+        file.try_lock().map_err(|_|"This project session is open in another Alogian Code window. Close it before resuming here.".to_string())?;
         Ok(Self { _file: file })
     }
 }

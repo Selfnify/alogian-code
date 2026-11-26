@@ -20,7 +20,7 @@ mod credential_tests {
     #[test]
     fn windows_credential_round_trip_uses_a_separate_synthetic_entry() {
         let name = format!("fixture-{}", std::process::id());
-        let entry = keyring::Entry::new("Selfnify Lume Code validation", &name).unwrap();
+        let entry = keyring::Entry::new("Selfnify Alogian Code validation", &name).unwrap();
         struct Cleanup(keyring::Entry);
         impl Drop for Cleanup {
             fn drop(&mut self) {
@@ -59,14 +59,14 @@ pub fn api() -> Result<String, String> {
     Ok(value)
 }
 fn credential(api: &str) -> Result<keyring::Entry, String> {
-    keyring::Entry::new("Selfnify Lume Code", api).map_err(|e| e.to_string())
+    keyring::Entry::new("Selfnify Alogian Code", api).map_err(|e| e.to_string())
 }
 impl Connection {
     pub fn load() -> Result<Self, String> {
         let api = api()?;
         let token = credential(&api)?
             .get_password()
-            .map_err(|_| "Sign in first: lume-code login.".to_owned())?;
+            .map_err(|_| "Sign in first: alogian login.".to_owned())?;
         Ok(Self {
             http: Client::builder()
                 .user_agent("LumeCode/0.1.0")
@@ -116,7 +116,7 @@ impl Connection {
             Ok(response) => response,
             Err(_) => {
                 return SessionStatus::Unavailable(
-                    "Lume could not be reached to check this account.".into(),
+                    "Alogian could not be reached to check this account.".into(),
                 )
             }
         };
@@ -125,7 +125,7 @@ impl Connection {
             Ok(value) => value,
             Err(_) => {
                 return SessionStatus::Unavailable(
-                    "Lume returned an unreadable account status.".into(),
+                    "Alogian returned an unreadable account status.".into(),
                 )
             }
         };
@@ -142,7 +142,7 @@ impl Connection {
             SessionStatus::Unavailable(
                 value["error"]
                     .as_str()
-                    .unwrap_or("Lume could not check this account.")
+                    .unwrap_or("Alogian could not check this account.")
                     .to_owned(),
             )
         }
@@ -168,7 +168,7 @@ pub async fn command(args: &[String]) -> Result<bool, String> {
         return Ok(false);
     };
     if action == "--help" || action == "help" {
-        println!("Lume Code\n  lume-code [--project PATH]\n  lume-code login\n  lume-code logout\n\nSign-in opens your existing Lume login page. The terminal also shows a copyable URL.\nType / for commands; ? for shortcuts. /resume opens saved sessions. /dirs shows folder access. /side-history shows side answers. Ctrl-T expands latest inline tools; Ctrl-R prepares recovery. Shift-Tab changes Plan/Edit. Escape stops.");
+        println!("Alogian Code\n  alogian [--project PATH]\n  alogian login\n  alogian logout\n\nSign-in opens your existing Alogian login page. The terminal also shows a copyable URL.\nType / for commands; ? for shortcuts. /resume opens saved sessions. /dirs shows folder access. /side-history shows side answers. Ctrl-T expands latest inline tools; Ctrl-R prepares recovery. Shift-Tab changes Plan/Edit. Escape stops.");
         return Ok(true);
     }
     if action != "logout" {
@@ -177,7 +177,7 @@ pub async fn command(args: &[String]) -> Result<bool, String> {
     let api = api()?;
     if let Ok(c) = Connection::load() {
         if c.request("/auth/logout", Some(&json!({}))).await.is_err() {
-            eprintln!("Could not confirm server sign-out. Revoke this session in Lume Settings if needed.");
+            eprintln!("Could not confirm server sign-out. Revoke this session in Alogian Settings if needed.");
         }
     }
     let _ = credential(&api)?.delete_credential();

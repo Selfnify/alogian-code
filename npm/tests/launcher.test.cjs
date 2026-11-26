@@ -26,7 +26,7 @@ test('help and version do not start the application or require sign-in', () => {
   for (const argument of ['--help', '--version']) {
     let output = '';
     assert.equal(run([argument], { stdout: { write: text => { output += text; } } }), 0);
-    assert.match(output, /Lume Code/);
+    assert.match(output, /Alogian Code/);
   }
 });
 test('unsupported platforms, missing binaries and launch failures report actionable errors', () => {

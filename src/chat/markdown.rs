@@ -245,7 +245,7 @@ pub fn render(text: &str) -> Vec<Line<'static>> {
 #[cfg(test)]
 mod tests;
 
-fn highlight(code: &str, lang: &str) -> Vec<Vec<(String, Color)>> {
+pub(crate) fn highlight(code: &str, lang: &str) -> Vec<Vec<(String, Color)>> {
     use std::sync::OnceLock;
     use syntect::{
         easy::HighlightLines,

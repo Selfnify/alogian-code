@@ -117,7 +117,7 @@ fn title_line() -> Line<'static> {
                 .add_modifier(Modifier::BOLD),
         ),
         Span::styled(
-            "Lume Code",
+            "Alogian Code",
             Style::default()
                 .fg(theme::text())
                 .add_modifier(Modifier::BOLD),
@@ -183,4 +183,86 @@ fn truncate_left(text: &str, width: usize) -> String {
     let keep = width.saturating_sub(1);
     let tail: String = text.chars().skip(count - keep).collect();
     format!("…{tail}")
+}
+
+pub fn transcript_lines(width: u16) -> Vec<Line<'static>> {
+    let box_w = (width as usize).min(BOX_MAX_W as usize);
+    if box_w < 12 {
+        return vec![compact_line(width)];
+    }
+    let inner = box_w - 2;
+    let border = Style::default()
+        .fg(theme::accent())
+        .add_modifier(Modifier::DIM);
+    let cwd = display_directory(
+        &env::current_dir()
+            .map(|path| path.display().to_string())
+            .unwrap_or_else(|_| String::from("?")),
+    );
+    let logo_w = LOGO_COL_W as usize;
+    let show_logo = inner >= logo_w + 1 + MIN_TEXT_W as usize;
+    let text_w = if show_logo { inner - logo_w - 2 } else { inner - 1 };
+    let info: Vec<Vec<Span<'static>>> = vec![
+        title_line().spans,
+        vec![Span::styled(
+            truncate_left(&cwd, text_w),
+            Style::default().fg(theme::text()),
+        )],
+        vec![],
+        vec![Span::styled(
+            truncate_left("/ for commands · ? for shortcuts", text_w),
+            Style::default()
+                .fg(theme::text())
+                .add_modifier(Modifier::DIM),
+        )],
+    ];
+    let logo = logo_rows();
+    let rows = if show_logo {
+        logo.len().max(info.len())
+    } else {
+        info.len()
+    };
+    let mut out = vec![Line::styled(format!("╭{}╮", "─".repeat(inner)), border)];
+    for i in 0..rows {
+        let mut spans: Vec<Span<'static>> = vec![Span::styled("│", border)];
+        let mut used = 0usize;
+        if show_logo {
+            let row = logo.get(i).cloned().unwrap_or_default();
+            spans.push(Span::styled(
+                format!(" {row} "),
+                Style::default().fg(theme::accent()),
+            ));
+            spans.push(Span::styled("│", border));
+            used += logo_w + 1;
+        }
+        spans.push(Span::raw(" "));
+        used += 1;
+        let right = info.get(i).cloned().unwrap_or_default();
+        used += right
+            .iter()
+            .map(|s| s.content.chars().count())
+            .sum::<usize>();
+        spans.extend(right);
+        if used < inner {
+            spans.push(Span::raw(" ".repeat(inner - used)));
+        }
+        spans.push(Span::styled("│", border));
+        out.push(Line::from(spans));
+    }
+    out.push(Line::styled(format!("╰{}╯", "─".repeat(inner)), border));
+    out
+}
+
+pub fn compact_line(width: u16) -> Line<'static> {
+    let cwd = display_directory(
+        &env::current_dir()
+            .map(|path| path.display().to_string())
+            .unwrap_or_else(|_| String::from("?")),
+    );
+    Line::styled(
+        truncate_left(&format!(" Alogian Code · {cwd}"), width as usize),
+        Style::default()
+            .fg(theme::text())
+            .add_modifier(Modifier::DIM),
+    )
 }

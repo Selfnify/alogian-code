@@ -16,25 +16,25 @@ function run(args, options = {}) {
   const arch = options.arch || process.arch;
   const write = options.write || ((text) => process.stderr.write(text));
   if (args.length === 1 && ['--version', '-v'].includes(args[0])) {
-    (options.stdout || process.stdout).write(`Lume Code ${pkg.version}\n`);
+    (options.stdout || process.stdout).write(`Alogian Code ${pkg.version}\n`);
     return 0;
   }
   if (args.length === 1 && ['--help', '-h'].includes(args[0])) {
     (options.stdout || process.stdout).write(
-      'Lume Code\n\nUsage: lume [login|logout] [--project PATH]\n\n' +
-      'Run lume in your project folder to start. Sign in with your Lume account.\n' +
-      'Inside Lume, type / for commands or ? for keyboard shortcuts.\n');
+      'Alogian Code\n\nUsage: alogian [login|logout] [--project PATH]\n\n' +
+      'Run alogian in your project folder to start. Sign in with your Alogian account.\n' +
+      'Inside Alogian, type / for commands or ? for keyboard shortcuts.\n');
     return 0;
   }
   const key = `${platform}-${arch}`;
   const binary = targets[key];
   if (!binary) {
-    write('Lume Code currently supports Windows x64 and macOS (Apple Silicon and Intel).\n');
+    write('Alogian Code currently supports Windows x64 and macOS (Apple Silicon and Intel).\n');
     return 1;
   }
   const executable = options.executable || path.join(__dirname, '..', 'native', key, binary);
   if (!existsSync(executable)) {
-    write('The Lume executable is missing. Reinstall the npm package.\n');
+    write('The Alogian executable is missing. Reinstall the npm package.\n');
     return 1;
   }
   const astra = path.join(path.dirname(executable), platform === 'win32' ? 'ast-grep.exe' : 'ast-grep');
@@ -44,7 +44,7 @@ function run(args, options = {}) {
     stdio: 'inherit', shell: false, windowsHide: false
   });
   if (result.error) {
-    write(`Could not start Lume: ${result.error.message}\n`);
+    write(`Could not start Alogian: ${result.error.message}\n`);
     return 1;
   }
   return result.status ?? (result.signal === 'SIGINT' ? 130 : 1);
