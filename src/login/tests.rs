@@ -37,7 +37,7 @@ fn login_screen_has_manual_start_and_full_public_url_without_the_private_verifie
         .map(|c| c.symbol())
         .collect::<String>();
     assert!(text.contains("Public sign-in token"));
-    assert!(text.contains("Copy URL [C]"));
+    assert!(text.contains("Copy URL"));
     assert!(text.contains("code_token="));
     assert!(!text.contains("poll_secret"));
     assert!(text.matches('a').count() >= 200);

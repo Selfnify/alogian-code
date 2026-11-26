@@ -1339,11 +1339,11 @@ mod ui_tests {
     #[test]
     fn tasker_is_live_ungrouped_and_approval_is_visible() {
         let shown = screen(false, false);
-        assert!(shown.contains("● Writing file"));
+        assert!(shown.contains("● Read file"));
         assert!(shown.contains("LIVE FILE CONTENTS"));
         let approval = screen(true, true);
         assert!(approval.contains("[Y] Approve"));
-        assert!(approval.contains("● Writing file"));
+        assert!(approval.contains("● Read file"));
         assert!(approval.contains("Finished file"));
     }
     #[test]

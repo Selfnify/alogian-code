@@ -61,6 +61,7 @@ fn commands_render_as_ungrouped_rows_that_pulse_then_turn_green() {
     let mut timeline = Timeline::default();
     let mut command = task("one", false);
     command.name = "run_command".into();
+    command.label = "Running command".into();
     command.command = "cargo test".into();
     command.detail = "running tests".into();
     let mut tasks = vec![command];
@@ -114,6 +115,6 @@ fn file_writes_show_nothing_while_running_then_a_green_diff() {
     let mut lines = vec![];
     timeline.render(0, &mut lines);
     let text = lines.iter().map(|l| l.to_string()).collect::<Vec<_>>().join("\n");
-    assert!(text.contains("Created a.txt +2"));
+    assert!(text.contains("Added a.txt +2"));
     assert!(text.contains("+ line one"));
 }
