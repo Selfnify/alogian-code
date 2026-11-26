@@ -47,6 +47,7 @@ fn inline_tools_preserve_message_boundaries_and_click_targets_after_wrapping() {
                 &tasks,
                 false,
                 None,
+                0,
             );
         })
         .unwrap();
@@ -91,7 +92,7 @@ fn usage_recovery_and_folder_access_stay_above_the_textbox_on_small_terminals() 
             ratatui::Terminal::new(ratatui::backend::TestBackend::new(width, 32)).unwrap();
         terminal
             .draw(|f| {
-                draw_screen(f, &textbox, &[], None, "✢", false, 0, &[], false, None);
+                draw_screen(f, &textbox, &[], None, "✢", false, 0, &[], false, None, 0);
             })
             .unwrap();
         let rows = terminal

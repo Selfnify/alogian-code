@@ -1324,6 +1324,7 @@ mod ui_tests {
                     } else {
                         None
                     },
+                    0,
                 );
             })
             .unwrap();
@@ -1382,6 +1383,7 @@ mod ui_tests {
                         &[],
                         false,
                         None,
+                    0,
                     );
                 })
                 .unwrap();
