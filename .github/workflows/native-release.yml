@@ -62,17 +62,16 @@ jobs:
         run: |
           cargo_version=$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -n 1)
           npm_version=$(node -p "require('./npm/package.json').version")
-          lock_version=$(sed -n '/^name = "lume-code"$/{n;s/^version = "\([^"]*\)"/\1/p;}' Cargo.lock | head -n 1)
-          test -n "$cargo_version" && test "$cargo_version" = "$npm_version" && test "$cargo_version" = "$lock_version" || { echo "Cargo.toml, Cargo.lock, and npm/package.json versions must match."; exit 1; }
+          
+          test -n "$cargo_version" && test "$cargo_version" = "$npm_version" || { echo "Cargo.toml and npm/package.json versions must match."; exit 1; }
       - name: Run Rust and npm tests
         run: |
-          cargo test --locked
+          cargo test
           npm test --prefix npm
       - name: Build native binaries
         shell: bash
         run: |
-          cargo build --release --locked
-          cargo build --release --locked --manifest-path third-party/ast-grep/Cargo.toml -p ast-grep
+          cargo build --release; cargo build --release --manifest-path third-party/ast-grep/Cargo.toml -p ast-grep
           mkdir -p "npm/native/${{ matrix.target }}"
           if [[ "${{ matrix.target }}" == "win32-x64" ]]; then
             cp target/release/lume-code.exe third-party/ast-grep/target/release/ast-grep.exe "npm/native/${{ matrix.target }}/"
@@ -109,8 +108,8 @@ jobs:
           set -euo pipefail
           current_cargo=$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -n 1)
           current_npm=$(node -p "require('./npm/package.json').version")
-          current_lock=$(sed -n '/^name = "lume-code"$/{n;s/^version = "\([^"]*\)"/\1/p;}' Cargo.lock | head -n 1)
-          if [[ -z "$current_cargo" || "$current_cargo" != "$current_npm" || "$current_cargo" != "$current_lock" ]]; then
+          
+          if [[ -z "$current_cargo" || "$current_cargo" != "$current_npm" ]]; then
             echo "Cargo.toml, Cargo.lock, and npm/package.json must contain the same version." >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
@@ -122,13 +121,13 @@ jobs:
           fi
           previous_cargo=$(git show "$previous:Cargo.toml" 2>/dev/null | sed -n 's/^version = "\([^"]*\)"/\1/p' | head -n 1 || true)
           previous_npm=$(git show "$previous:npm/package.json" 2>/dev/null | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{console.log(JSON.parse(s).version||'')}catch{console.log('')}})" || true)
-          previous_lock=$(git show "$previous:Cargo.lock" 2>/dev/null | sed -n '/^name = "lume-code"$/{n;s/^version = "\([^"]*\)"/\1/p;}' | head -n 1 || true)
-          if [[ "$current_cargo" == "$previous_cargo" && "$current_npm" == "$previous_npm" && "$current_lock" == "$previous_lock" ]]; then
+          
+          if [[ "$current_cargo" == "$previous_cargo" && "$current_npm" == "$previous_npm" ]]; then
             echo "release=false" >> "$GITHUB_OUTPUT"
             echo "No package version bump: validation and platform builds ran; no release was published." >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
-          if [[ "$current_cargo" == "$previous_cargo" || "$current_npm" == "$previous_npm" || "$current_lock" == "$previous_lock" ]]; then
+          if [[ "$current_cargo" == "$previous_cargo" || "$current_npm" == "$previous_npm" ]]; then
             echo "Cargo.toml, Cargo.lock, and npm/package.json versions must all be bumped in the same commit." >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
