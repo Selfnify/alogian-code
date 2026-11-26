@@ -185,7 +185,7 @@ jobs:
           if gh release view "$tag" >/dev/null 2>&1; then
             gh release upload "$tag" release/* --clobber
           else
-            gh release create "$tag" release/* --title "Lume Code $VERSION" --generate-notes --target "$GITHUB_SHA"
+            gh release create "$tag" release/* --title "Alogian Code $VERSION" --generate-notes --target "$GITHUB_SHA"
           fi
           gh release view "$tag" --json url,assets --jq '"Release: " + .url + "\nAssets: " + ([.assets[].name] | join(", "))' | tee -a "$GITHUB_STEP_SUMMARY"
 
